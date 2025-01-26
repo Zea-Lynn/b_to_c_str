@@ -36,8 +36,9 @@ int b_to_c_str(uint64_t binary_size, uint8_t * binary, uint64_t * out_str_size, 
 
 		int use_byte = is_pritable(byte, use_extended_ascii);
 		use_byte &= !(was_hex_literal && is_hex_char(byte));
+		use_byte &= use_ascii;
 
-		if(use_byte && use_ascii){
+		if(use_byte){
 			if(out_str){
 				if((1 + str_size) >= *out_str_size) return 1; 
 				out_str[str_size] = byte;
