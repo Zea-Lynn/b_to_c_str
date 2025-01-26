@@ -16,22 +16,21 @@ static int is_hex_char(uint8_t c){
 	|| (c > 0x60 && c < 0x67);
 }
 
-static int is_pritable(uint8_t c, int use_extended_ascii){
-	return (c > 0x1f && c < 0x7e && c != '\\' && c != '"')
-	|| (use_extended_ascii && c > 0xa0);
+static int is_pritable(uint8_t c){
+	return (c > 0x1f && c < 0x7e && c != '\\' && c != '"');
 }
 
 static int is_extended(uint8_t c){return c > 128;}
 
 //returns 0 on success.
-int b_to_c_str(uint64_t binary_size, uint8_t * binary, uint64_t * out_str_size, char * out_str, int use_ascii, int use_extended_ascii){
+int b_to_c_str(uint64_t binary_size, uint8_t * binary, uint64_t * out_str_size, char * out_str, int use_ascii){
 	int64_t str_size = 0;
 	int was_hex_literal = 0;
 
 	for(int64_t i = 0; i < binary_size; ++i){
 		uint8_t byte = binary[i];
 
-		int use_byte = is_pritable(byte, use_extended_ascii);
+		int use_byte = is_pritable(byte);
 		use_byte &= !(was_hex_literal && is_hex_char(byte));
 		use_byte &= use_ascii;
 
@@ -47,8 +46,8 @@ int b_to_c_str(uint64_t binary_size, uint8_t * binary, uint64_t * out_str_size, 
 			c_str replacement_str = hex_strs[byte];
 			was_hex_literal = 1;
 
-			if(byte == '\\'){ replacement_str_size = sizeof("\\\\")-1; replacement_str = "\\\\"; was_hex_literal = 0;}
-			if(byte == '"'){ replacement_str_size = sizeof("\\\"")-1; replacement_str = "\\\""; was_hex_literal = 0;}
+			if(byte == '\\' && use_ascii){ replacement_str_size = sizeof("\\\\")-1; replacement_str = "\\\\"; was_hex_literal = 0;}
+			if(byte == '"' && use_ascii){ replacement_str_size = sizeof("\\\"")-1; replacement_str = "\\\""; was_hex_literal = 0;}
 
 			if(out_str){
 				if((replacement_str_size + str_size) >= *out_str_size) return 1; 
@@ -68,13 +67,13 @@ int b_to_c_str(uint64_t binary_size, uint8_t * binary, uint64_t * out_str_size, 
 
 struct{
 	c_str file_name;
-	int use_ascii, use_extended_ascii;
+	int use_ascii;
 } argument_data;
 
 int main(int argv, char ** argc){
 	memset(&argument_data, 0, sizeof(argument_data));
 	uint8_t in_buffer[1<<9] = {0};
-	char out_buffer[sizeof(in_buffer) * hex_strs_size] = {0};
+	char out_buffer[sizeof(in_buffer) * (hex_strs_size+1)] = {0};
 
 	c_str data_name = "data";
 	FILE *input = stdin;
@@ -92,8 +91,7 @@ int main(int argv, char ** argc){
 			continue;
 		}
 
-		argument_data.use_ascii		 = strcmp(argc[i], "-a") == 0;
-		argument_data.use_extended_ascii = strcmp(argc[i], "-e") == 0;
+		if(strcmp(argc[i], "-a") == 0) argument_data.use_ascii = 1;
 	}
 
 	uint64_t bytes_read;
@@ -103,12 +101,12 @@ int main(int argv, char ** argc){
 		bytes_read= fread(in_buffer, 1, sizeof(in_buffer), input);
 
 		uint64_t out_buffer_size = 0;
-		b_to_c_str(bytes_read, in_buffer, &out_buffer_size, 0, argument_data.use_ascii, argument_data.use_extended_ascii);
+		b_to_c_str(bytes_read, in_buffer, &out_buffer_size, 0, argument_data.use_ascii);
 		if(out_buffer_size > sizeof(out_buffer)){
 			fprintf(stderr, "Error out buffer requers: %lu and has %lu", out_buffer_size, sizeof(out_buffer));
 			return 1;
 		}
-		b_to_c_str(bytes_read, in_buffer, &out_buffer_size, out_buffer, argument_data.use_ascii, argument_data.use_extended_ascii);
+		b_to_c_str(bytes_read, in_buffer, &out_buffer_size, out_buffer, argument_data.use_ascii);
 		out_string_size += out_buffer_size-1;
 		if(out_buffer_size-1 > 0) printf("\"%s\"\n", out_buffer);
 	}while(bytes_read);
